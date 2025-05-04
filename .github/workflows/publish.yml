@@ -17,11 +17,11 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: set up docker buildx
         run: |
-          docker buildx create --name workerbuild --use
+          docker buildx create --name rworkerbuild --use
       - name: Build and Publish Docker Image
         run: |
           docker buildx build . \
-            --platform linux/arm64,linux/amd64 \
+            --platform linux/arm64 \
             --tag ghcr.io/polarfoxdev/straenge-riddle-worker:latest \
             --tag ghcr.io/polarfoxdev/straenge-riddle-worker:${{ github.sha }} \
             --push
