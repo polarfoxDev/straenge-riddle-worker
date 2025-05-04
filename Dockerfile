@@ -11,4 +11,3 @@ RUN go build -o /app/main .
 FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /app/main .
-EXPOSE 8080
