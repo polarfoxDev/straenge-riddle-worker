@@ -160,6 +160,7 @@ func main() {
 		}
 
 		res := models.JobSuccess{
+			ParallelCount: parallelCount,
 			SuperSolution: superSolution,
 			Output:        string(outputJson),
 			StartedAt:     startedAt,

@@ -12,4 +12,5 @@ type JobSuccess struct {
 	Output        string    `json:"Output"`
 	StartedAt     time.Time `json:"StartedAt"`
 	FinishedAt    time.Time `json:"FinishedAt"`
+	ParallelCount int       `json:"ParallelCount"`
 }

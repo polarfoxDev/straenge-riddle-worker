@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sort"
 	"straenge-riddle-worker/m/defaults/colors"
+	"straenge-riddle-worker/m/random"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -171,7 +172,7 @@ func (riddle *Riddle) fillSubgraphRecursive(depth int, subgraph []*Node) (*Riddl
 	}
 	// randomize order of available words
 	for i := range availableWords {
-		j := rand.Intn(i + 1)
+		j := random.NewSafeRand().Intn(i + 1)
 		availableWords[i], availableWords[j] = availableWords[j], availableWords[i]
 	}
 	logrus.Debug("[fillSubgraphRecursive("+strconv.Itoa(depth)+")] availableWord count: ", len(availableWords))
@@ -350,7 +351,7 @@ func (riddle *Riddle) fillWordRecursive(depth int, word *RiddleWord, subgraph []
 	}
 	// randomize order of possible nodes
 	for i := range possibleNodes {
-		j := rand.Intn(i + 1)
+		j := random.NewSafeRand().Intn(i + 1)
 		possibleNodes[i], possibleNodes[j] = possibleNodes[j], possibleNodes[i]
 	}
 	// depth first try to fill the word with possible nodes
