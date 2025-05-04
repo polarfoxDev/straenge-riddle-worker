@@ -1,1 +1,0 @@
-# straenge-riddle-worker
