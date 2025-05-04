@@ -7,9 +7,8 @@ type Job struct {
 	Payload string `json:"Payload"`
 }
 
-type JobResult struct {
-	Status     string    `json:"Status"`
-	Type       string    `json:"Type"`
+type JobSuccess struct {
 	Output     string    `json:"Output"`
+	StartedAt  time.Time `json:"StartedAt"`
 	FinishedAt time.Time `json:"FinishedAt"`
 }

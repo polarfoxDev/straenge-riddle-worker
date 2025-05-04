@@ -69,13 +69,24 @@ func main() {
 		return
 	}
 
+	retryTimeoutStr, success := os.LookupEnv("RETRY_TIMEOUT_SECONDS")
+	if !success {
+		logrus.Fatal("RETRY_TIMEOUT_SECONDS not set")
+		return
+	}
+	retryTimeout, err := strconv.Atoi(retryTimeoutStr)
+	if err != nil {
+		logrus.Fatalf("Invalid RETRY_TIMEOUT_SECONDS value: %v", err)
+		return
+	}
+
 	logrus.Info("Started worker...")
 
 	for {
+		time.Sleep(10 * time.Second)
 		logrus.Info("Waiting for jobs...")
-		jobRaw, err := client.RPopLPush(ctx, "tasks", "processing").Result()
+		jobRaw, err := client.RPopLPush(ctx, "generate-riddle", "processing").Result()
 		if err == redis.Nil {
-			time.Sleep(5 * time.Second)
 			continue
 		} else if err != nil {
 			logrus.Errorf("Redis Error: %v", err)
@@ -89,7 +100,15 @@ func main() {
 			continue
 		}
 
-		ctxTimeout, cancel := context.WithTimeout(ctx, time.Duration(jobTimeout)*time.Second)
+		timeout := jobTimeout
+		if job.Type == "retry" {
+			timeout = retryTimeout
+		}
+
+		startedAt := time.Now().UTC()
+
+		logrus.Infof("Job type: %s, timeout: %d seconds", job.Type, timeout)
+		ctxTimeout, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 
 		riddle, err := processJob(ctxTimeout, job, parallelCount)
 
@@ -99,7 +118,14 @@ func main() {
 
 		if err != nil {
 			logrus.Errorf("❌ Job failed: %v", err)
-			client.LPush(ctx, "retry", jobRaw)
+			if job.Type != "retry" {
+				job.Type = "retry"
+				jobRaw, err := json.Marshal(job)
+				if err != nil {
+					continue
+				}
+				client.LPush(ctx, "generate-riddle", jobRaw)
+			}
 			continue
 		}
 
@@ -108,25 +134,36 @@ func main() {
 		outputJson, err := json.Marshal(output)
 		if err != nil {
 			logrus.Errorf("❌ Output could not be serialized: %v", err)
-			client.LPush(ctx, "retry", jobRaw)
+			if job.Type != "retry" {
+				job.Type = "retry"
+				jobRaw, err := json.Marshal(job)
+				if err != nil {
+					continue
+				}
+				client.LPush(ctx, "generate-riddle", jobRaw)
+			}
 			continue
 		}
 
-		res := models.JobResult{
-			Status:     "done",
-			Type:       job.Type,
+		res := models.JobSuccess{
 			Output:     string(outputJson),
+			StartedAt:  startedAt,
 			FinishedAt: time.Now().UTC(),
 		}
-		resJson, err := json.Marshal(res) // handle error
+		resJson, err := json.Marshal(res)
 		if err != nil {
 			logrus.Errorf("❌ Result could not be serialized: %v", err)
-			client.LPush(ctx, "retry", jobRaw)
+			if job.Type != "retry" {
+				job.Type = "retry"
+				jobRaw, err := json.Marshal(job)
+				if err != nil {
+					continue
+				}
+				client.LPush(ctx, "generate-riddle", jobRaw)
+			}
 			continue
 		}
-		client.LPush(ctx, "results", resJson)
+		client.LPush(ctx, "generate-riddle-result", resJson)
 		logrus.Info("✅ Job successfully processed and result saved.")
-
-		time.Sleep(30 * time.Second)
 	}
 }

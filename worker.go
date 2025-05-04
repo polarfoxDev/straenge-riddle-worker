@@ -30,7 +30,7 @@ func processJob(ctx context.Context, job models.Job, parallelCount int) (*models
 }
 
 func generateRiddleSingleTry(superSolution string, wordPool []string) *models.Riddle {
-	logrus.Info("Running riddle generation...")
+	logrus.Infof("Running riddle generation for super solution: %s", superSolution)
 	var riddle, err = models.NewRiddle(superSolution, wordPool)
 	if err != nil {
 		logrus.Warn("Failed to create starting riddle")
