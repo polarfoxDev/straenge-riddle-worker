@@ -43,8 +43,13 @@ func init() {
 }
 
 func main() {
+	redisUrl, success := os.LookupEnv("REDIS_URL")
+	if !success {
+		logrus.Fatal("REDIS_URL not set")
+		return
+	}
 	client = redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: redisUrl,
 	})
 
 	parallelCountStr, success := os.LookupEnv("PARALLEL_COUNT")
@@ -84,7 +89,7 @@ func main() {
 
 	for {
 		time.Sleep(10 * time.Second)
-		logrus.Info("Waiting for jobs...")
+		logrus.Info("Waiting for jobs of source generate-riddle...")
 		jobRaw, err := client.RPopLPush(ctx, "generate-riddle", "processing").Result()
 		if err == redis.Nil {
 			continue
@@ -145,10 +150,20 @@ func main() {
 			continue
 		}
 
+		var riddleConcept models.RiddleConcept
+		var superSolution string
+		err = json.Unmarshal([]byte(job.Payload), &riddleConcept)
+		if err != nil {
+			riddleConcept.SuperSolution = "INVALID"
+		} else {
+			superSolution = riddleConcept.SuperSolution
+		}
+
 		res := models.JobSuccess{
-			Output:     string(outputJson),
-			StartedAt:  startedAt,
-			FinishedAt: time.Now().UTC(),
+			SuperSolution: superSolution,
+			Output:        string(outputJson),
+			StartedAt:     startedAt,
+			FinishedAt:    time.Now().UTC(),
 		}
 		resJson, err := json.Marshal(res)
 		if err != nil {
@@ -164,6 +179,6 @@ func main() {
 			continue
 		}
 		client.LPush(ctx, "generate-riddle-result", resJson)
-		logrus.Info("✅ Job successfully processed and result saved.")
+		logrus.Info("✅ Job successfully processed and result saved to queue generate-riddle-result")
 	}
 }
