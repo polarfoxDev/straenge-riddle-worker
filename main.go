@@ -134,7 +134,14 @@ func main() {
 			continue
 		}
 
-		output := convert.TransformToOutputFormat(riddle, job.Type)
+		var riddleConcept models.RiddleConcept
+		err = json.Unmarshal([]byte(job.Payload), &riddleConcept)
+		if err != nil {
+			logrus.Errorf("❌ Riddle concept could not be deserialized: %v", err)
+			continue
+		}
+
+		output := convert.TransformToOutputFormat(riddle, riddleConcept.ThemeDescription)
 
 		outputJson, err := json.Marshal(output)
 		if err != nil {
@@ -150,18 +157,9 @@ func main() {
 			continue
 		}
 
-		var riddleConcept models.RiddleConcept
-		var superSolution string
-		err = json.Unmarshal([]byte(job.Payload), &riddleConcept)
-		if err != nil {
-			riddleConcept.SuperSolution = "INVALID"
-		} else {
-			superSolution = riddleConcept.SuperSolution
-		}
-
 		res := models.JobSuccess{
 			ParallelCount: parallelCount,
-			SuperSolution: superSolution,
+			SuperSolution: riddleConcept.SuperSolution,
 			Output:        string(outputJson),
 			StartedAt:     startedAt,
 			FinishedAt:    time.Now().UTC(),
