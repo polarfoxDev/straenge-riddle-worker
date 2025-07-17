@@ -1,9 +1,9 @@
 package random
 
 import (
-	crand "crypto/rand" // für sicheren Seed
+	crand "crypto/rand" // for seed
 	"encoding/binary"
-	"math/rand" // für rand.New() und rand.Rand
+	"math/rand" // for rand.New() and rand.Rand
 )
 
 func NewSafeRand() *rand.Rand {
