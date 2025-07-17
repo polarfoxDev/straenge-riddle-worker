@@ -224,30 +224,6 @@ func (riddle *Riddle) fillSubgraphRecursive(depth int, subgraph []*Node) (*Riddl
 
 func (riddle *Riddle) FillWord(word *RiddleWord, subgraph []*Node) (*Riddle, error) {
 	return riddle.fillWordRecursive(0, word, subgraph, 0, nil, nil, false)
-	// forbiddenPaths := [][]*LetterEdge{}
-	// isAmbiguous := true
-	// for i := 0; i < 10; i++ {
-	// 	fmt.Println(i)
-	// 	newRiddle, err := riddle.fillWordRecursive(0, word, subgraph, 0, nil, nil, false, forbiddenPaths)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	isAmbiguous, _ = newRiddle.CheckForAmbiguity()
-	// 	if isAmbiguous {
-	// 		edges := newRiddle.GetEdgesForWord(word)
-	// 		// add pseudo edge for the last node
-	// 		edges = append(edges, &LetterEdge{
-	// 			Word:  word,
-	// 			Node1: edges[len(edges)-1].Node2,
-	// 			Node2: &Node{Row: -1, Col: -1},
-	// 		})
-	// 		forbiddenPaths = append(forbiddenPaths, edges)
-	// 		continue
-	// 	}
-	// 	return newRiddle, nil
-	// }
-	// fmt.Println("Not able to fill word " + word.Word + " without ambiguity")
-	// return nil, &RiddleError{ErrType: ErrAmbiguity, Message: "Not able to fill word without ambiguity"}
 }
 
 func isEdgeReachable(node *Node, rowToReach, colToReach int, remainingSteps int) bool {
@@ -295,17 +271,6 @@ func (riddle *Riddle) fillWordRecursive(depth int, word *RiddleWord, subgraph []
 						continue
 					}
 				}
-				// // if forbiddenPaths contains an edge that would be drawn by filling this node, skip it
-				// forbiddenPath := false
-				// for _, path := range forbiddenPaths {
-				// 	if path[index].Node1.Row == node.Row && path[index].Node1.Col == node.Col {
-				// 		forbiddenPath = true
-				// 		break
-				// 	}
-				// }
-				// if forbiddenPath {
-				// 	continue
-				// }
 
 				possibleNodes = append(possibleNodes, node)
 			}
@@ -332,17 +297,6 @@ func (riddle *Riddle) fillWordRecursive(depth int, word *RiddleWord, subgraph []
 					}
 				}
 			}
-			// // if forbiddenPaths contains an edge that would be drawn by filling this node, skip it
-			// forbiddenPath := false
-			// for _, path := range forbiddenPaths {
-			// 	if path[index].Node1.Row == node.Row && path[index].Node1.Col == node.Col {
-			// 		forbiddenPath = true
-			// 		break
-			// 	}
-			// }
-			// if forbiddenPath {
-			// 	continue
-			// }
 			possibleNodes = append(possibleNodes, node)
 		}
 	}
