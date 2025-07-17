@@ -41,8 +41,8 @@ The riddle worker is a Go-based service that automates the creation of riddles f
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/polarfoxDev/straenge-concept-worker.git
-cd straenge-concept-worker
+git clone https://github.com/polarfoxDev/straenge-riddle-worker.git
+cd straenge-riddle-worker
 go mod tidy
 ```
 
