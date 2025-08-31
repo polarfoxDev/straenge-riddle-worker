@@ -12,7 +12,7 @@ type RiddleWord struct {
 	Used            bool   `json:"used"`
 }
 
-var specialCharacterMap = []string{"Ä", "Ö", "Ü", "ẞ"}
+var specialCharacterMap = []string{"Ä", "Ö", "Ü", "ẞ", "Å", "É", ":"}
 
 func MakeWordSafe(word string) string {
 	word = strings.ToUpper(word)
