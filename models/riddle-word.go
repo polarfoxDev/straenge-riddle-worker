@@ -1,33 +1,45 @@
 package models
 
-import (
-	"strconv"
-	"strings"
-)
+import "strings"
 
 type RiddleWord struct {
 	Word            string `json:"word"`
 	IsSuperSolution bool   `json:"isSuperSolution"`
 	Color           string `json:"color"`
 	Used            bool   `json:"used"`
+	letters         []rune
+	cachedWord      string
 }
-
-var specialCharacterMap = []string{"Ä", "Ö", "Ü", "ẞ", "Å", "É", ":"}
 
 func MakeWordSafe(word string) string {
 	word = strings.ToUpper(word)
 	word = strings.ReplaceAll(word, " ", "")
 	word = strings.ReplaceAll(word, "-", "")
 	word = strings.ReplaceAll(word, "ß", "ẞ")
-	for i, specialCharacter := range specialCharacterMap {
-		word = strings.ReplaceAll(word, specialCharacter, strconv.Itoa(i))
-	}
 	return word
 }
 
-func MakeWordUnsafe(word string) string {
-	for i, specialCharacter := range specialCharacterMap {
-		word = strings.ReplaceAll(word, strconv.Itoa(i), specialCharacter)
+func (word *RiddleWord) ensureLetters() {
+	if word == nil {
+		return
 	}
-	return word
+	if word.cachedWord != word.Word {
+		word.letters = []rune(word.Word)
+		word.cachedWord = word.Word
+	}
+}
+
+func (word *RiddleWord) Length() int {
+	word.ensureLetters()
+	return len(word.letters)
+}
+
+func (word *RiddleWord) RuneAt(index int) rune {
+	word.ensureLetters()
+	return word.letters[index]
+}
+
+func (word *RiddleWord) Letters() []rune {
+	word.ensureLetters()
+	return word.letters
 }
