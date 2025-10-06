@@ -163,7 +163,8 @@ func (riddle *Riddle) fillSubgraphRecursive(depth int, subgraph []*Node) (*Riddl
 	logrus.Debug("[fillSubgraphRecursive("+strconv.Itoa(depth)+")] Trying to fill subgraph with length ", len(subgraph))
 	availableWords := []*RiddleWord{}
 	for _, word := range riddle.Words {
-		if !word.Used && (len(word.Word) <= len(subgraph)-4 || len(word.Word) == len(subgraph)) {
+		wordLength := word.Length()
+		if !word.Used && (wordLength <= len(subgraph)-4 || wordLength == len(subgraph)) {
 			availableWords = append(availableWords, word)
 		}
 	}
@@ -243,11 +244,12 @@ func isEdgeReachable(node *Node, rowToReach, colToReach int, remainingSteps int)
 }
 
 func (riddle *Riddle) fillWordRecursive(depth int, word *RiddleWord, subgraph []*Node, index int, firstNode *Node, previousNode *Node, touchedOppositeEdge bool) (*Riddle, error) {
-	logrus.Debug("[fillWordRecursive("+strconv.Itoa(depth)+")] Trying to fill word ", word.Word, "(l=", len(word.Word), ")[i=", index, "] into subgraph with length ", len(subgraph))
-	if index == len(word.Word) {
+	wordLength := word.Length()
+	logrus.Debug("[fillWordRecursive("+strconv.Itoa(depth)+")] Trying to fill word ", word.Word, "(l=", wordLength, ")[i=", index, "] into subgraph with length ", len(subgraph))
+	if index == wordLength {
 		return riddle, nil
 	}
-	if len(subgraph) < len(word.Word)-index {
+	if len(subgraph) < wordLength-index {
 		return nil, &RiddleError{ErrType: ErrWordFill, Message: "Subgraph too small"}
 	}
 	if firstNode == nil {
@@ -259,7 +261,7 @@ func (riddle *Riddle) fillWordRecursive(depth int, word *RiddleWord, subgraph []
 	}
 	var possibleNodes []*Node = []*Node{}
 	minimumRemainingSubgraphSize := 4
-	remainingLetterCount := len(word.Word) - index
+	remainingLetterCount := wordLength - index
 	if remainingLetterCount == len(subgraph) {
 		minimumRemainingSubgraphSize = remainingLetterCount - 1
 	}
@@ -331,7 +333,7 @@ func (riddle *Riddle) fillWordRecursive(depth int, word *RiddleWord, subgraph []
 		}
 		riddleCopy, lastErr = riddleCopy.fillWordRecursive(depth+1, word, nextSubgraph, index+1, firstNode, node, touchedOppositeEdge)
 		if lastErr == nil {
-			logrus.Debug("[fillWordRecursive("+strconv.Itoa(depth)+")] Successfully filled word ", word.Word, "(l=", len(word.Word), ") into subgraph with length ", len(subgraph))
+			logrus.Debug("[fillWordRecursive("+strconv.Itoa(depth)+")] Successfully filled word ", word.Word, "(l=", wordLength, ") into subgraph with length ", len(subgraph))
 			return riddleCopy, nil
 		}
 		logrus.Debug("[fillWordRecursive("+strconv.Itoa(depth)+")] Failed using this node because: ", lastErr.Error())
@@ -417,7 +419,7 @@ func (riddle *Riddle) GetEmptyAdjacentNodes(node *Node) []*Node {
 	return emptyAdjacentNodes
 }
 
-func (riddle *Riddle) getAdjacentNodesWithLetter(node *Node, letter byte, nodesToIgnore []*Node) []*Node {
+func (riddle *Riddle) getAdjacentNodesWithLetter(node *Node, letter rune, nodesToIgnore []*Node) []*Node {
 	var allAdjacentNodes = riddle.GetAdjacentNodes(node, true)
 	var matchingAdjacentNodes []*Node
 	for _, adjacentNode := range allAdjacentNodes {
@@ -426,7 +428,7 @@ func (riddle *Riddle) getAdjacentNodesWithLetter(node *Node, letter byte, nodesT
 				continue
 			}
 		}
-		if adjacentNode.RiddleWord != nil && adjacentNode.RiddleWord.Word[adjacentNode.RiddleWordIndex] == letter {
+		if adjacentNode.RiddleWord != nil && adjacentNode.RiddleWord.RuneAt(adjacentNode.RiddleWordIndex) == letter {
 			matchingAdjacentNodes = append(matchingAdjacentNodes, adjacentNode)
 		}
 	}
@@ -553,6 +555,10 @@ func (riddle *Riddle) CheckForAmbiguity() (bool, [][]*LetterEdge) {
 		if !word.Used && !word.IsSuperSolution {
 			continue
 		}
+		wordLength := word.Length()
+		if wordLength == 0 {
+			continue
+		}
 		var wordNodes = []*Node{}
 		for _, node := range riddle.Nodes {
 			if node.RiddleWord != nil && node.RiddleWord.Word == word.Word {
@@ -563,7 +569,7 @@ func (riddle *Riddle) CheckForAmbiguity() (bool, [][]*LetterEdge) {
 		// start with first letter and find all nodes that have this letter
 		var startingNodes []*Node
 		for _, node := range riddle.Nodes {
-			if node.RiddleWord != nil && node.RiddleWord.Word[node.RiddleWordIndex] == word.Word[0] {
+			if node.RiddleWord != nil && node.RiddleWord.RuneAt(node.RiddleWordIndex) == word.RuneAt(0) {
 				startingNodes = append(startingNodes, node)
 			}
 		}
@@ -573,7 +579,7 @@ func (riddle *Riddle) CheckForAmbiguity() (bool, [][]*LetterEdge) {
 		for _, startingNode := range startingNodes {
 			var paths = getPossiblePaths(riddle, word, startingNode, 0, []*Node{})
 			for _, path := range paths {
-				if len(path) < len(word.Word)-1 {
+				if len(path) < wordLength-1 {
 					continue
 				}
 				// check if path continues outside of the word nodes
@@ -594,11 +600,11 @@ func (riddle *Riddle) CheckForAmbiguity() (bool, [][]*LetterEdge) {
 }
 
 func getPossiblePaths(riddle *Riddle, word *RiddleWord, node *Node, index int, nodesToIgnore []*Node) [][]*LetterEdge {
-	if index+1 == len(word.Word) {
+	if index+1 == word.Length() {
 		return [][]*LetterEdge{}
 	}
 	nodesToIgnore = append(nodesToIgnore, node)
-	var nextLetter = word.Word[index+1]
+	var nextLetter = word.RuneAt(index + 1)
 	var nextNodes = riddle.getAdjacentNodesWithLetter(node, nextLetter, nodesToIgnore)
 	var paths = [][]*LetterEdge{}
 	for _, nextNode := range nextNodes {
@@ -632,7 +638,7 @@ func (riddle *Riddle) Render(debugOnly bool) {
 				if node.RiddleWordIndex == -1 {
 					fmt.Print(node.RiddleWord.Color + "?" + colors.Reset)
 				} else {
-					fmt.Print(node.RiddleWord.Color + string(node.RiddleWord.Word[node.RiddleWordIndex]) + colors.Reset)
+					fmt.Print(node.RiddleWord.Color + string(node.RiddleWord.RuneAt(node.RiddleWordIndex)) + colors.Reset)
 				}
 			}
 			fmt.Print("|") // Add vertical grid line after each cell

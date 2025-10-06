@@ -21,7 +21,7 @@ func TransformToOutputFormat(riddle *models.Riddle, theme string) *models.Riddle
 				if node.RiddleWordIndex == -1 {
 					riddleConfig.Letters[i][j] = "?"
 				} else {
-					riddleConfig.Letters[i][j] = models.MakeWordUnsafe(string(node.RiddleWord.Word[node.RiddleWordIndex]))
+					riddleConfig.Letters[i][j] = string(node.RiddleWord.RuneAt(node.RiddleWordIndex))
 				}
 			}
 		}
@@ -39,7 +39,7 @@ func TransformToOutputFormat(riddle *models.Riddle, theme string) *models.Riddle
 		riddleConfig.Solutions = append(riddleConfig.Solutions, models.SolutionConfig{
 			Locations:       locations,
 			IsSuperSolution: word.IsSuperSolution,
-			Word:            models.MakeWordUnsafe(word.Word),
+			Word:            word.Word,
 		})
 	}
 	return &riddleConfig
