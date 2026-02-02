@@ -20,26 +20,88 @@ var (
 	client *redis.Client
 )
 
+// JobMetadata mirrors the API's job metadata structure
+type JobMetadata struct {
+	JobID         string             `json:"jobId"`
+	Status        string             `json:"status"`
+	RiddleConcept models.RiddleConcept `json:"riddleConcept"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	StartedAt     *time.Time         `json:"startedAt,omitempty"`
+	FinishedAt    *time.Time         `json:"finishedAt,omitempty"`
+	Error         string             `json:"error,omitempty"`
+	Result        string             `json:"result,omitempty"`
+}
+
 func init() {
-	// read dotenv file
-	err := godotenv.Load()
+	godotenv.Load()
+	logLevel, success := os.LookupEnv("LOG_LEVEL")
+	if !success {
+		logrus.SetLevel(logrus.InfoLevel)
+	} else {
+		level, err := logrus.ParseLevel(logLevel)
+		if err != nil {
+			logrus.SetLevel(logrus.InfoLevel)
+		} else {
+			logrus.SetLevel(level)
+		}
+	}
+}
+
+// updateJobStatus updates the status of a job in Redis
+func updateJobStatus(jobID string, status string, startedAt *time.Time, finishedAt *time.Time, errorMsg string, result string) error {
+	if jobID == "" {
+		return nil // Legacy job without ID
+	}
+
+	key := "job:" + jobID
+	existing, err := client.Get(ctx, key).Result()
 	if err != nil {
-		logrus.Warn("No .env file found")
+		logrus.Warnf("Could not get existing job metadata for %s: %v", jobID, err)
+		return err
 	}
-	// setup logging
-	lvl, ok := os.LookupEnv("LOG_LEVEL")
-	// LOG_LEVEL not set, let's default to info
-	if !ok {
-		lvl = "info"
+
+	var metadata JobMetadata
+	if err := json.Unmarshal([]byte(existing), &metadata); err != nil {
+		logrus.Warnf("Could not unmarshal job metadata for %s: %v", jobID, err)
+		return err
 	}
-	// parse string, this is built-in feature of logrus
-	ll, err := logrus.ParseLevel(lvl)
+
+	metadata.Status = status
+	if startedAt != nil {
+		metadata.StartedAt = startedAt
+	}
+	if finishedAt != nil {
+		metadata.FinishedAt = finishedAt
+	}
+	if errorMsg != "" {
+		metadata.Error = errorMsg
+	}
+	if result != "" {
+		metadata.Result = result
+	}
+
+	updated, err := json.Marshal(metadata)
 	if err != nil {
-		ll = logrus.InfoLevel
+		return err
 	}
-	// set global log level
-	logrus.SetLevel(ll)
-	logrus.Info("Logging initialized with level: ", lvl)
+
+	return client.Set(ctx, key, updated, 24*time.Hour).Err()
+}
+
+// parseJobPayload extracts job ID and riddle concept from the payload
+func parseJobPayload(payload string) (string, *models.RiddleConcept, error) {
+	// Try new format first
+	var jobPayload models.JobPayload
+	if err := json.Unmarshal([]byte(payload), &jobPayload); err == nil && jobPayload.JobID != "" {
+		return jobPayload.JobID, &jobPayload.RiddleConcept, nil
+	}
+
+	// Fall back to legacy format
+	var riddleConcept models.RiddleConcept
+	if err := json.Unmarshal([]byte(payload), &riddleConcept); err != nil {
+		return "", nil, err
+	}
+	return "", &riddleConcept, nil
 }
 
 func main() {
@@ -100,7 +162,15 @@ func main() {
 
 		var job models.Job
 		if err := json.Unmarshal([]byte(jobRaw), &job); err != nil {
-			logrus.Errorf("❌ Invalid Job: %v", err)
+			logrus.Errorf("Invalid Job: %v", err)
+			client.LRem(ctx, "processing", 1, jobRaw)
+			continue
+		}
+
+		// Parse job payload to get job ID and riddle concept
+		jobID, riddleConcept, err := parseJobPayload(job.Payload)
+		if err != nil {
+			logrus.Errorf("Failed to parse job payload: %v", err)
 			client.LRem(ctx, "processing", 1, jobRaw)
 			continue
 		}
@@ -112,7 +182,12 @@ func main() {
 
 		startedAt := time.Now().UTC()
 
-		logrus.Infof("Job type: %s, timeout: %d seconds", job.Type, timeout)
+		// Update job status to "working"
+		if err := updateJobStatus(jobID, "working", &startedAt, nil, "", ""); err != nil {
+			logrus.Warnf("Failed to update job status to working: %v", err)
+		}
+
+		logrus.Infof("Job ID: %s, type: %s, timeout: %d seconds", jobID, job.Type, timeout)
 		ctxTimeout, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 
 		riddle, err := processJob(ctxTimeout, job, parallelCount)
@@ -122,22 +197,25 @@ func main() {
 		client.LRem(ctx, "processing", 1, jobRaw) // clean up processing list
 
 		if err != nil {
-			logrus.Errorf("❌ Job failed: %v", err)
+			logrus.Errorf("Job failed: %v", err)
+			finishedAt := time.Now().UTC()
 			if job.Type != "retry" {
+				// Update status to queued for retry
+				if updateErr := updateJobStatus(jobID, "queued", nil, nil, "", ""); updateErr != nil {
+					logrus.Warnf("Failed to update job status: %v", updateErr)
+				}
 				job.Type = "retry"
 				jobRaw, err := json.Marshal(job)
 				if err != nil {
 					continue
 				}
 				client.LPush(ctx, "generate-riddle", jobRaw)
+			} else {
+				// Update status to failed
+				if updateErr := updateJobStatus(jobID, "failed", nil, &finishedAt, err.Error(), ""); updateErr != nil {
+					logrus.Warnf("Failed to update job status: %v", updateErr)
+				}
 			}
-			continue
-		}
-
-		var riddleConcept models.RiddleConcept
-		err = json.Unmarshal([]byte(job.Payload), &riddleConcept)
-		if err != nil {
-			logrus.Errorf("❌ Riddle concept could not be deserialized: %v", err)
 			continue
 		}
 
@@ -145,39 +223,36 @@ func main() {
 
 		outputJson, err := json.Marshal(output)
 		if err != nil {
-			logrus.Errorf("❌ Output could not be serialized: %v", err)
-			if job.Type != "retry" {
-				job.Type = "retry"
-				jobRaw, err := json.Marshal(job)
-				if err != nil {
-					continue
-				}
-				client.LPush(ctx, "generate-riddle", jobRaw)
+			logrus.Errorf("Output could not be serialized: %v", err)
+			finishedAt := time.Now().UTC()
+			if updateErr := updateJobStatus(jobID, "failed", nil, &finishedAt, "Output serialization failed", ""); updateErr != nil {
+				logrus.Warnf("Failed to update job status: %v", updateErr)
 			}
 			continue
 		}
 
+		finishedAt := time.Now().UTC()
+
+		// Update job status to "completed"
+		if err := updateJobStatus(jobID, "completed", nil, &finishedAt, "", string(outputJson)); err != nil {
+			logrus.Warnf("Failed to update job status to completed: %v", err)
+		}
+
 		res := models.JobSuccess{
+			JobID:         jobID,
 			ParallelCount: parallelCount,
 			SuperSolution: riddleConcept.SuperSolution,
 			Output:        string(outputJson),
 			StartedAt:     startedAt,
-			FinishedAt:    time.Now().UTC(),
+			FinishedAt:    finishedAt,
 		}
 		resJson, err := json.Marshal(res)
 		if err != nil {
-			logrus.Errorf("❌ Result could not be serialized: %v", err)
-			if job.Type != "retry" {
-				job.Type = "retry"
-				jobRaw, err := json.Marshal(job)
-				if err != nil {
-					continue
-				}
-				client.LPush(ctx, "generate-riddle", jobRaw)
-			}
+			logrus.Errorf("Result could not be serialized: %v", err)
 			continue
 		}
 		client.LPush(ctx, "generate-riddle-result", resJson)
-		logrus.Info("✅ Job successfully processed and result saved to queue generate-riddle-result")
+		logrus.Info("Job successfully processed and result saved to queue generate-riddle-result")
 	}
 }
+

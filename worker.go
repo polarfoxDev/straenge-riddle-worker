@@ -11,16 +11,28 @@ import (
 )
 
 func processJob(ctx context.Context, job models.Job, parallelCount int) (*models.Riddle, error) {
-	logrus.Infof("🛠 Processing Job: %s with payload: %s\n", job.Type, job.Payload)
-	// extract riddle concept from job payload
-	var riddleConcept models.RiddleConcept
-	err := json.Unmarshal([]byte(job.Payload), &riddleConcept)
-	if err != nil {
-		return nil, fmt.Errorf("error processing job: %v", err)
+	logrus.Infof("Processing Job: %s with payload: %s", job.Type, job.Payload)
+
+	var riddleConcept *models.RiddleConcept
+
+	// Try parsing as JobPayload (new format with jobId)
+	var jobPayload models.JobPayload
+	if err := json.Unmarshal([]byte(job.Payload), &jobPayload); err == nil && jobPayload.JobID != "" {
+		riddleConcept = &jobPayload.RiddleConcept
+		logrus.Infof("Parsed job with ID: %s", jobPayload.JobID)
+	} else {
+		// Fall back to legacy format (RiddleConcept directly)
+		var legacyConcept models.RiddleConcept
+		if err := json.Unmarshal([]byte(job.Payload), &legacyConcept); err != nil {
+			return nil, fmt.Errorf("error processing job: %v", err)
+		}
+		riddleConcept = &legacyConcept
 	}
 
 	superSolution := riddleConcept.SuperSolution
 	wordPool := riddleConcept.WordPool
+	logrus.Infof("Processing riddle with super solution: %s and %d words", superSolution, len(wordPool))
+
 	riddle := generateRiddle(ctx, superSolution, wordPool, parallelCount)
 	if riddle == nil {
 		logrus.Warn("Failed to generate riddle")
@@ -64,7 +76,6 @@ func tryRiddleGenerationInParallel(superSolution string, wordPool []string, para
 	var wg sync.WaitGroup
 	resultChan := make(chan *models.Riddle, 1)
 
-	// Function to run in parallel
 	for i := 0; i < parallelCount; i++ {
 		wg.Add(1)
 		go func(index int) {
@@ -73,21 +84,17 @@ func tryRiddleGenerationInParallel(superSolution string, wordPool []string, para
 			if res != nil {
 				select {
 				case resultChan <- res:
-					// Signal found result
 				default:
-					// Ignore if result already sent
 				}
 			}
 		}(i)
 	}
 
-	// Close channel when all goroutines are done
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
 
-	// Wait for the first non-nil result or completion
 	if result, ok := <-resultChan; ok {
 		return result
 	}
