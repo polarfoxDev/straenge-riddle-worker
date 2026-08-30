@@ -419,12 +419,23 @@ func (riddle *Riddle) GetEmptyAdjacentNodes(node *Node) []*Node {
 	return emptyAdjacentNodes
 }
 
+// SimplePathAmbiguityCheck makes CheckForAmbiguity quantify over simple paths, as the
+// puzzle definition requires. Left false it reproduces the shipped behaviour.
+var SimplePathAmbiguityCheck = false
+
 func (riddle *Riddle) getAdjacentNodesWithLetter(node *Node, letter rune, nodesToIgnore []*Node) []*Node {
 	var allAdjacentNodes = riddle.GetAdjacentNodes(node, true)
 	var matchingAdjacentNodes []*Node
+outer:
 	for _, adjacentNode := range allAdjacentNodes {
 		for _, ignoredNode := range nodesToIgnore {
 			if adjacentNode.Row == ignoredNode.Row && adjacentNode.Col == ignoredNode.Col {
+				// The bare `continue` here only advanced the inner loop, so nodesToIgnore
+				// never had any effect and the search enumerated walks rather than simple
+				// paths. SimplePathAmbiguityCheck selects the intended behaviour.
+				if SimplePathAmbiguityCheck {
+					continue outer
+				}
 				continue
 			}
 		}
