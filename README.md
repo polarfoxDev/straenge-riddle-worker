@@ -1,5 +1,15 @@
 # Riddle worker for stränge.de riddle generation
 
+> **⚠️ Deprecated.** This service is no longer needed. Riddle generation now runs through
+> [`straenge-gen`](https://github.com/polarfoxDev/straenge-gen), a single CLI pipeline built
+> on [`straenge-generator`](https://github.com/polarfoxDev/straenge-generator) — a much
+> faster puzzle solver that replaces the algorithm this worker used — and that also replaces
+> the rest of this Redis-based worker fleet:
+> [`straenge-concept-worker`](https://github.com/polarfoxDev/straenge-concept-worker), this
+> repo, and [`straenge-results-worker`](https://github.com/polarfoxDev/straenge-results-worker).
+> `straenge-gen` handles concept generation, puzzle solving, AI rating and human approval in
+> one process — see that repo for the current workflow.
+
 This repository contains the **riddle worker** microservice for generating riddles for [strangui](https://github.com/polarfoxDev/strangui).
 
 ## Overview
